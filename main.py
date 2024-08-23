@@ -1,66 +1,70 @@
 import os
-from PIL import Image
-import pypandoc
+
 import click
+from PIL import Image
 
-def convert_image(input_path, output_format):
-    """
-    Convert an image to the specified format.
-
-    Args:
-        input_path (str): The path of the input image file.
-        output_format (str): The desired output image format (e.g., 'jpg', 'png').
-
-    Returns:
-        str: The path to the converted image file.
-    """
-    try:
-        with Image.open(input_path) as img:
-            output_path = os.path.splitext(input_path)[0] + '.' + output_format
-            img.convert('RGB').save(output_path, output_format.upper())
-            click.echo(f"Image converted to {output_format} and saved as {output_path}")
-            return output_path
-    except Exception as e:
-        click.echo(f"Error converting image: {e}", err=True)
-
-def convert_document(input_path, output_format):
-    """
-    Convert a document to the specified format.
-
-    Args:
-        input_path (str): The path of the input document file.
-        output_format (str): The desired output document format (e.g., 'pdf').
-
-    Returns:
-        str: The path to the converted document file.
-    """
-    try:
-        output_path = os.path.splitext(input_path)[0] + '.' + output_format
-        pypandoc.convert_file(input_path, output_format, outputfile=output_path)
-        click.echo(f"Document converted to {output_format} and saved as {output_path}")
-        return output_path
-    except Exception as e:
-        click.echo(f"Error converting document: {e}", err=True)
 
 @click.command()
-@click.argument('file_path', type=click.Path(exists=True))
-@click.argument('output_format', type=str)
-def convert(file_path, output_format):
+@click.argument("file_path", type=click.Path(exists=True))
+@click.option(
+    "--format",
+    "-f",
+    "output_format",
+    required=True,
+    help="The desired output format (e.g., jpg, pdf).",
+    type=click.Choice(["png", "jpg", 'jpeg'], case_sensitive=False)
+)
+@click.option('--output-path','-o', 'output_path', type=click.STRING, required=False, help='Filename to save the converted image (give option without extension)')
+def convert_image(file_path, output_format, output_path):
     """
-    Convert a file to a specified format.
+    Convert one jpg or png image to another format.
     
-    FILE_PATH: The path of the input file to convert.
-    OUTPUT_FORMAT: The desired output format (e.g., 'jpg', 'pdf').
+    FILE_PATH: The path of the input image to convert.
     """
-    output_format = output_format.lower()
+    # Open the image
+    try:
+        with Image.open(file_path) as img:
+            # Determine the output file path
+            if output_path is None:
+                output_path = os.path.splitext(file_path)[0] + '.' + output_format
+            else:
+                output_path = output_path + '.' + output_format
 
-    # Determine the file type and call the appropriate conversion function
-    if file_path.lower().endswith(('png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff')):
-        convert_image(file_path, output_format)
-    elif file_path.lower().endswith(('docx', 'md', 'html', 'odt', 'txt')):
-        convert_document(file_path, output_format)
-    else:
-        click.echo("Unsupported file format for conversion.", err=True)
+            # Convert to RGB if output is JPG/JPEG to avoid issues with transparency
+            if output_format.lower() == 'jpg' or output_format.lower() == 'jpeg':
+                output_format = 'jpeg'
+                img = img.convert('RGB')
 
-if __name__ == '__main__':
-    convert()
+            # Save the image in the desired format
+            img.save(output_path, output_format.upper())
+            click.echo(f"Image converted to {output_format.upper()} and saved as {output_path}")
+    except Exception as e:
+        click.echo(f'Something wrong has occured with this error: {e}')
+
+
+@click.command()
+@click.argument("file_path", type=click.Path(exists=True))
+@click.option('--output-path','-o', 'output_path', type=click.STRING, required=False, help='Filename to save the converted image (if a file exists it will overwrite it)')
+@click.option('--compression-level', '-c', type=click.INT, help='Compression level that the image you want to compression takes value from 1 to 3')
+def compress_image(file_path, output_path, compression_level):
+    # TODO: make this function more apptroachable
+    try: 
+        with Image.open(file_path) as img:
+            if output_path is None:
+                filename_with_format = os.path.splitext(file_path)
+                output_path = filename_with_format[0] + f'-{compression_level}-compressed'  + '.png'
+            img.save(output_path, 'PNG', compress_level=compression_level)
+    except Exception as e:
+        click.echo('something wrong happend: ')
+        print(e)
+                
+
+
+
+
+@click.group()
+def cli():
+    pass
+
+cli.add_command(convert_image, 'img')
+cli.add_command(compress_image, 'com')
